@@ -2,8 +2,6 @@ library(xlsx)
 library(plspm)
 library(psych)
 library(haven)
-library(Amelia)
-library(DMwR)
 library(mice)
 library(Hmisc)
 
@@ -51,11 +49,13 @@ df_org <- read_spss(data_file)
 # Subset selection here
 df = df_org[df_org$Q1==1,]
 selection = attr(df_org$Q1, "labels")[1]
-# Iteration setup here
+# Group variable if any
+group_var = 1
+df[is.na(df$kund_när), group_var]=99
+print(selection)
+print(attr(df_org$kund_när, "labels"))
 
 
-
-levels(df$Q1)
 plsdata <- df[, vars[1:n_manifests]]
 # Impute data
 for(i in 1:n_manifests){
@@ -63,18 +63,24 @@ for(i in 1:n_manifests){
 }
 anyNA(plsdata)
 
-#-----------------------------------------------------------------------------------------------------
-# Step for select subset data to run analysis on
-#-----------------------------------------------------------------------------------------------------
 
-
-plsdata = cbind(plsdata,as.data.frame(df[, vars[(n_manifests+1):(n_manifests+2)]]))
+plsdata = cbind(plsdata,as.data.frame(df[, c("kund_när", "CODERESP")]))
 satpls = plspm(plsdata, as.matrix(sat_path), sat_blocks, modes = sat_mod,boot.val = TRUE)
 
-describe((rescale(satpls)-1)*100/9)
-df_list <- split(plsdata, as.factor(plsdata$Q1)) #Data per Q1 in a list.
-list_names = attr(plsdata$Q1, "labels")
-Q1Names[1]
+df_list <- split(plsdata, as.factor(plsdata$kund_när)) #Data per Q1 in a list.
+list_names = attr(df_org$kund_när, "labels")
+number_of_G = length(df_list)
 
+# Some lists for storage
+PLS_run_list <- list_names
+# or it can be found by sum(select_this) where select_this = grepl("-> EPSI", TF$relationships)
 
-print(levels(plsdata$Q1)[as.numeric(1)])
+rescale <- plspm:::rescale
+
+rescale2 = scales:::rescale
+
+for (i in c(1:number_of_G)){
+  satpls = plspm(df_list[[i]], as.matrix(sat_path), sat_blocks, modes = sat_mod,boot.val = TRUE)
+  PLS_run_list[i] = list(satpls)
+  
+}
