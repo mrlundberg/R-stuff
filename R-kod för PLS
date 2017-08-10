@@ -1,0 +1,101 @@
+library(foreign)
+library(plsdepot)
+library(plspm)
+library(memisc)
+library(mice)
+library(VIM)
+
+bank_b2b = as.data.set(spss.system.file("C:/Users/erik.lundberg/Desktop/sommar/PLS/Bank_privat_swe_2016_EM.sav"), to.data.frame=TRUE)
+
+# rows of path matrix
+image           = c(0, 0, 0, 0, 0, 0, 0)
+expectations    = c(1, 0, 0, 0, 0, 0, 0)
+product_quality = c(1, 1, 0, 0, 0, 0, 0)
+service_quality = c(1, 1, 1, 0, 0, 0, 0)
+perceived_value = c(0, 0, 1, 1, 0, 0, 0)
+satisfaction    = c(1, 0, 1, 1, 1, 0, 0)
+loyalty         = c(0, 0, 0, 0, 0, 1, 0)
+
+image           = c(0, 1, 1, 1, 1, 1, 1)
+expectations    = c(1, 0, 1, 1, 1, 1, 1)
+product_quality = c(1, 1, 0, 1, 1, 1, 1)
+service_quality = c(1, 1, 1, 0, 1, 1, 1)
+perceived_value = c(1, 1, 1, 1, 0, 1, 1)
+satisfaction    = c(1, 1, 1, 1, 1, 0, 1)
+loyalty         = c(1, 1, 1, 1, 1, 1, 0)
+
+
+
+# matrix (by row binding)
+b2b_path = rbind(image, expectations, product_quality, service_quality, perceived_value, satisfaction, loyalty)
+
+colnames(b2b_path) = rownames(b2b_path)
+
+# plot the inner matrix
+innerplot(b2b_path, box.size = 0.1)
+
+image_out = c("q4a", "q4b", "q4c", "q4d")
+expect_out = c("q5a", "q5b", "q5c")
+prod_out = c("q7a", "q7b", "q7c")
+serv_out = c("q7d", "q7e", "q7f", "q7g")
+value_out = c("q8a", "q8b", "q8c")
+epsi_out = c("q3", "q6", "q16")
+loyal_out = c("q10", "q15", "q15b")
+
+
+
+bank_block2 = c(c(match(image_out,names(bank_b2b))), c(match(expect_out,names(bank_b2b))), c(match(prod_out,names(bank_b2b))),
+                c(match(serv_out,names(bank_b2b))),c(match(value_out,names(bank_b2b))),c(match(epsi_out,names(bank_b2b))),
+                c(match(loyal_out,names(bank_b2b))))
+
+
+bank_b2b_sub = bank_b2b[, c(bank_block2)]
+
+bank_block = list(match(image_out,names(bank_b2b_sub)), match(expect_out,names(bank_b2b_sub)), match(prod_out,names(bank_b2b_sub)),
+                  match(serv_out,names(bank_b2b_sub)),match(value_out,names(bank_b2b_sub)),match(epsi_out,names(bank_b2b_sub)),
+                  match(loyal_out,names(bank_b2b_sub)))
+
+
+bank_modes = rep("A", 7)
+df1 = rapply(bank_b2b_sub,function(x) ifelse(x=="10 Instämmer helt",10,x), how = "replace")
+df1[is.na(df1)] <- 98
+df2 = as.data.frame(sapply(df1, as.numeric))
+df2[df2 == 98] <- NA
+
+#plot patterns of missing
+aggr_plot <- aggr(df2, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(df2), cex.axis=.7, gap=3, ylab=c("Histogram of missing df2","Pattern"))
+
+
+md.pattern(df2)
+
+tempData <- mice(df2,m=5,maxit=50,meth='pmm',seed=500)
+#summary(tempData)
+
+completedData <- complete(tempData,1)
+#summary(completedData)
+
+bank_pls = plspm(completedData, b2b_path, bank_block, modes = bank_modes)
+
+# check unidimensionality, Croncbach's alphas and the Dillon-Goldstein's rhos should be >0.7 which they are
+#first eigenvalue >>1, second eigenvalue <1
+bank_pls$unidim
+
+# check outer model, loading ska vara >0.7
+bank_pls$outer_model
+
+# check cross loadings, om en rad heter sup.nåt så måste support-kolonnen vara större än de andra på den raden osv
+bank_pls$crossloadings
+
+# plotting loadings
+plot(bank_pls, what = "loadings")
+
+# gof index, gärna >0.7
+bank_pls$gof
+
+# rescaling scores
+Scores = rescale(bank_pls)
+
+plot(bank_pls)
+Paths = bank_pls$path_coefs
+arrow_lwd = 10 * round(Paths, 2)
+plot(bank_pls, arr.lwd = arrow_lwd)
